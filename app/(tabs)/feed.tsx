@@ -1,5 +1,14 @@
-import React from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import React, { useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
+  Pressable,
+} from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '@/constants/colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useTopicStore } from '@/store/useTopicStore';
@@ -14,18 +23,46 @@ export default function FeedScreen() {
   const selectedTopics = useTopicStore((s) => s.selectedTopics);
   const articles = useNewsStore((s) => s.articles);
   const loading = useNewsStore((s) => s.loading);
+  const refreshing = useNewsStore((s) => s.refreshing);
+  const error = useNewsStore((s) => s.error);
+  const fetchNews = useNewsStore((s) => s.fetchNews);
+  const refreshNews = useNewsStore((s) => s.refreshNews);
+  const loadMore = useNewsStore((s) => s.loadMore);
 
   const selectedLabels = TOPICS.filter((t) => selectedTopics.includes(t.id)).map(
     (t) => t.label
   );
+
+  useEffect(() => {
+    fetchNews();
+  }, [selectedTopics]);
+
+  const handleRefresh = useCallback(() => {
+    refreshNews();
+  }, []);
+
+  const handleOpenArticle = useCallback((url: string) => {
+    WebBrowser.openBrowserAsync(url);
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <FlatList
         data={articles}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <NewsCard article={item} />}
-        contentContainerStyle={styles.list}
+        renderItem={({ item }) => (
+          <NewsCard article={item} onPress={() => handleOpenArticle(item.url)} />
+        )}
+        contentContainerStyle={articles.length === 0 ? styles.emptyList : styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.accent}
+          />
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.5}
         ListHeaderComponent={
           <View style={styles.header}>
             <View style={styles.topicRow}>
@@ -42,16 +79,49 @@ export default function FeedScreen() {
             </View>
           </View>
         }
+        ListFooterComponent={
+          loading && articles.length > 0 ? (
+            <ActivityIndicator
+              style={styles.footer}
+              color={theme.accent}
+              size="small"
+            />
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={[styles.emptyIcon, { color: theme.textSecondary }]}>
-              {loading ? 'Loading...' : 'No articles yet'}
-            </Text>
-            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
-              {loading
-                ? 'Fetching your personalized news feed'
-                : 'Your personalized news feed will appear here.\nAPI integration coming in Phase 2.'}
-            </Text>
+            {loading ? (
+              <>
+                <ActivityIndicator size="large" color={theme.accent} />
+                <Text style={[styles.emptyText, { color: theme.textSecondary, marginTop: 16 }]}>
+                  Fetching your personalized news feed...
+                </Text>
+              </>
+            ) : error ? (
+              <>
+                <Text style={[styles.emptyTitle, { color: theme.error }]}>
+                  Something went wrong
+                </Text>
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  {error}
+                </Text>
+                <Pressable
+                  onPress={fetchNews}
+                  style={[styles.retryButton, { backgroundColor: theme.accent }]}
+                >
+                  <Text style={styles.retryText}>Try Again</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>
+                  No articles found
+                </Text>
+                <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+                  Pull down to refresh, or check your topic selections in Settings.
+                </Text>
+              </>
+            )}
           </View>
         }
       />
@@ -65,6 +135,9 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingVertical: 8,
+  },
+  emptyList: {
+    flexGrow: 1,
   },
   header: {
     paddingHorizontal: 16,
@@ -84,13 +157,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  footer: {
+    paddingVertical: 20,
+  },
   empty: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 80,
     paddingHorizontal: 40,
   },
-  emptyIcon: {
+  emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
@@ -99,5 +175,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

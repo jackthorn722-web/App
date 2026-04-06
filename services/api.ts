@@ -1,17 +1,21 @@
 import axios from 'axios';
 import { Article } from '@/types';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = 'http://localhost:3000';
+// Use the Expo dev server's host to build the backend URL.
+// In development on a physical device, localhost won't work — we need the LAN IP.
+const devHost = Constants.expoConfig?.hostUri?.split(':')[0] ?? 'localhost';
+const API_BASE_URL = __DEV__
+  ? `http://${devHost}:3000`
+  : 'http://localhost:3000'; // Replace with production URL
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
-
-// Stub API functions — will be implemented in Phase 2
 
 export async function getNews(
   topics: string[],
@@ -20,7 +24,10 @@ export async function getNews(
   const response = await apiClient.get('/api/news', {
     params: { topics: topics.join(','), page },
   });
-  return response.data;
+  return {
+    articles: response.data.articles,
+    totalPages: response.data.pagination.totalPages,
+  };
 }
 
 export async function getSummary(

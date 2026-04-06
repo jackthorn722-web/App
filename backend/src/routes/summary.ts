@@ -1,20 +1,26 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
+import { generateSummary } from '../services/summaryService';
 
 export const summaryRouter = Router();
 
 // POST /api/summary
 // Body: { articleUrl: string, articleText: string }
-summaryRouter.post('/', async (req: Request, res: Response) => {
-  const { articleUrl, articleText } = req.body;
+summaryRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { articleUrl, articleText } = req.body;
 
-  if (!articleUrl && !articleText) {
-    res.status(400).json({ error: 'articleUrl or articleText is required' });
-    return;
+    if (!articleText) {
+      res.status(400).json({ error: 'articleText is required' });
+      return;
+    }
+
+    const summary = await generateSummary(articleText);
+
+    res.json({
+      summary,
+      articleUrl,
+    });
+  } catch (err) {
+    next(err);
   }
-
-  // Phase 2: call summaryService.generateSummary(articleText)
-  res.json({
-    summary: 'Summary generation coming in Phase 2.',
-    articleUrl,
-  });
 });
